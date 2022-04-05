@@ -1,0 +1,220 @@
+WebServer
+HttpConnectionHandler connectionHandler
+GoldbachWebApp goldbachWeb
+connectionOfSockets := create_queue_of_sockets
+
+int main(argc,agrv[]):
+    number_of_handler_connections := agrv[1]
+    start(Webserver, number_of_handler_connections)
+
+
+HttpServer::HttpServer(number_of_handler_connections):
+    for index to number_of_handler_connections do
+        connectionHandler[index] := new connectionHandler(connectionOfSockets)
+        connectionHandler[index] startThread()
+        connectionHandler[index] waitToFinish()
+    end for
+    
+
+WebServer::start(int number_of_handler_connections):
+    listenForConnections();
+    acceptAllConnections();
+
+
+TCPServer::acceptAllConnections():
+    while true
+
+        acceptConnectionRequest()
+        
+    end while
+
+TCPServer::handleClientConnection(Socket Client):
+    enqueue(Client, connectionOfSockets)
+
+HttpConnectionHandler::run():
+    consumeForever()
+
+Consumer::consumeForever():
+    while true
+
+        Socket data := dequeue(connectionOfSockets);
+        consume(data)
+
+    end while
+
+HttpConnectionHandler::consume(Socket data):
+    while true
+
+        HttpRequest request(data)
+
+        if !HttpRequest 
+            break;
+        end if
+
+        HttpResponse response(data)
+        reference_to_server->handleHttpRequest(request,response)
+
+    end while
+
+WebServer::handleHttpRequest(HttpRequest request, HttpResponse response):
+    route(request,response)
+
+WebServer::route(HttpRequest request, HttpResponse response):
+    regex inQuery("^/goldbach(/|\\?number=)(\\int64_t*numbers)$")
+   
+    if regex_search(uri,matches,inQuery)
+        numbers = stoll(matches[2]);
+    end if
+
+    goldbachWeb->serveGoldbachSums(httpRequest,httpResponse,numbers)
+
+
+GoldbachWebApp::serveGoldbachSums(HttpRequest httpRequest, HttpResponse httpResponse, number):
+    string sums := send_vector(number)
+    httpResponse.body(sums)
+
+GoldbachWebApp::send_vector(int64_t *numbers_to_goldbach, int64_t counter):
+    response_id = get_id()
+    pair<pair<int, int>, int64_t> push_pair
+    vector_for_producers[0][response_id]->response.counter = counter
+    for index =0 to counter:
+      push_pair.first.first = response_id
+      push_pair.first.second = index
+      push_pair.second = vec_in_request[index]
+      queue_of_consuming->push(push_pair)
+    end for
+    vector_for_producers[0][response_id]->can_get_my_request->wait()
+    data_per_request =vector_for_producers[0][response_id]->response.vector_of_numbers
+    return toString(data_per_request,counter)
+
+GoldbachManager::get_id():
+    return current_id_on_server;
+
+----------------------STRUCTS FOR CALCULATOR----------------------------
+struct {
+  first
+  second
+  third
+} Map
+
+struct {
+  number
+  bool sign
+  position
+  sums_by_number
+  Map *map
+} Data
+
+struct {
+  Data *vector_of_sums
+  counter
+  Mutex mutex
+} Response
+struct{
+  Semaphore
+  Response
+} In_vector
+
+-----------------------------------------------------------------------
+
+GoldbachCaculator::consume(pair<pair<int, int>, int64_t>& data):
+  numbers = data;
+  int response_id = numbers.first.first
+  int pos_on_vec = numbers.first.second
+  data_of_number.number = numbers.second
+  if (data_of_number.number < 0):
+    data_of_number.sign = true
+  else:
+    data_of_number.sign = false
+  end if
+  if (verify_pair(data_of_number.number)):
+    even_goldbach_sums(data_of_number)
+  else:
+    odd_goldbach_sums(data_of_number)
+  end if
+  vector_for_producers[0][response_id]->response.mutex.lock()
+  if (vector_for_producers[0][response_id]->response.counter == 1):
+    vector_for_producers[0][response_id]->response.vector_of_numbers[pos_on_vec] = data_of_number
+    vector_for_producers[0][response_id]->response.counter--
+    vector_for_producers[0][response_id]->response.mutex.unlock()
+    vector_for_producers[0][response_id]->can_get_my_request->signal()
+  else:
+    vector_for_producers[0][response_id]->response.counter--
+    vector_for_producers[0][response_id]->response.vector_of_numbers[pos_on_vec] = data_of_number
+    vector_for_producers[0][response_id]->response.mutex.unlock()
+  end if
+
+GoldbachCaculator::even_goldbach_sums(Data& data):
+    counter := 0
+    num := data.number
+    if num < 0:
+        num := num*-1
+    endif
+    num2 := 0
+    size := 50
+    for index1 := 2 to num/2:
+        if verify_prime(index1):
+            num2 := num - index1
+            if num2 >= index1 && verify_prime(num2):
+                if data.sign:
+                    if counter == size:
+                        size := size * 2
+                        data.map := realloc(size * sizeof(Map))
+                    endif
+                    data.map[counter].first := index1
+                    data.map[counter].second := num2
+                endif
+                counter++
+            endif
+        endif
+    endfor
+    data.sums_by_number := counter
+
+GoldbachCalculators::odd_goldbach_sums(Data& data):
+    counter = 0
+    size = 50
+    num := data.number
+    if num < 0:
+        num := num*-1; 
+    endif
+    num2 := 0
+    max_iterations := (num + 1) / 2
+    for index1 := 2 to max_iterations:
+        if verify_prime(index1):
+            for index2 := index1 to max_iterations: (index2+=2)
+                if verify_prime(index2):
+                    num2 := num - index1;
+                    num2 := num2 - index2;
+                    if num2 >= index2 && verify_prime(num2):
+                        if data.sign:
+                            if counter == size:
+                                size := size * 2
+                                data.map := realloc(size * sizeof(Map))
+                            endif
+                            data.map[counter].first := index1
+                            data.map[counter].second := index2
+                            data.map[counter].third := num2
+                        endif
+                        counter++
+                    endif
+                endif
+            endfor
+        endif
+    endfor
+    data.sums_by_number := counter
+
+GoldbachCalculators::verify_prime(int64_t number):
+  if (number == 2 || number == 3 || number == 5 || number == 7):
+    return true;
+  endif
+  if (number % 2 == 0 || number % 3 == 0 || number % 5 == 0 ||
+      number % 7 == 0):
+    return false;
+  else:
+    for i := 11  to number : (i += 6)
+      if (number % i == 0 || number % (i + 2) == 0):
+        return false;
+      endif
+    endfor
+    return true;
+  endif

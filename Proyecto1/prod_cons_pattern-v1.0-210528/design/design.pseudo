@@ -1,0 +1,89 @@
+WebServer
+HttpConnectionHandler connectionHandler
+GoldbachWebApp goldbachWeb
+GoldbachCaculator goldbachCalcu
+connectionOfSockets := create_queue_of_sockets
+
+int main(argc,agrv[]):
+    number_of_handler_connections := agrv[1]
+    start(Webserver, number_of_handler_connections)
+
+
+HttpServer::HttpServer(number_of_handler_connections):
+    for index to number_of_handler_connections do
+        connectionHandler[index] := new connectionHandler(connectionOfSockets)
+        connectionHandler[index] startThread()
+        connectionHandler[index] waitToFinish()
+    end for
+    
+
+WebServer::start(int number_of_handler_connections):
+    this->listenForConnections();
+    this->acceptAllConnections();
+
+
+TCPServer::acceptAllConnections():
+    while true
+
+        this->acceptConnectionRequest()
+        
+    end while
+
+TCPServer::handleClientConnection(Socket Client):
+    connectionOfSockets.push(Client)
+
+HttpConnectionHandler::run():
+    this->consumeForever()
+
+Consumer::consumeForever():
+    while true
+
+        Socket data := this->connectionOfSockets.pop();
+        this->consume(data)
+
+    end while
+
+HttpConnectionHandler::consume(Socket data):
+    while true
+
+        HttpRequest request(data)
+
+        if !HttpRequest 
+            break;
+        end if
+
+        HttpResponse response(data)
+        reference_to_server->handleHttpRequest(request,response)
+
+    end while
+
+WebServer::handleHttpRequest(HttpRequest request, HttpResponse response):
+    this->route(request,response)
+
+WebServer::route(HttpRequest request, HttpResponse response):
+    regex inQuery("^/goldbach(/|\\?number=)(\\int64_t*numbers)$")
+   
+    if regex_search(uri,matches,inQuery)
+        numbers = stoll(matches[2]);
+    end if
+
+    goldbachWeb->serveGoldbachSums(httpRequest,httpResponse,numbers)
+
+
+GoldbachWebApp::serveGoldbachSums(HttpRequest httpRequest, HttpResponse httpResponse, number):
+    string sums := goldbachCalcu->calculateGoldbachSums(numbers)
+    httpResponse.body(sums)
+
+
+GoldbachCaculator::calculateGoldbachSums(int64_t * numbers):
+    for i to numbers.length() do
+
+        if is_pair(numbers[i]) 
+            even_goldbach_sums(number[i])
+        end if
+        else
+            odd_goldbach_sums(number[i])
+        end else
+
+    end for
+    
